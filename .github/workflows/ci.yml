@@ -2,17 +2,22 @@ name: MoodFLOW CI Pipeline
 
 on:
   push:
-    branches: [ main, testing-setup ]
+    branches: [main, testing-setup]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
-  run-tests:
+  ci:
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        node-version: [20]
+    env:
+      CI: true
+      NEXT_PUBLIC_FIREBASE_API_KEY: "AIzaSyC8f9Xmxj9aKpy_46bs63_7ZvzlH7YGLYU"
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: "moodflow-35f58.firebaseapp.com"
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: "moodflow-35f58"
+      NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: "moodflow-35f58.firebasestorage.app"
+      NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "318904658225"
+      NEXT_PUBLIC_FIREBASE_APP_ID: "1:318904658225:web:1da9cc583cede5d6bce810"
+      NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: "G-0LRGBXMBKW"
 
     steps:
       - name: Checkout repository
@@ -21,28 +26,75 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: "20"
+
+      - name: Stub Firebase service account for backend TypeScript build
+        run: |
+          cat > backend/moodflow-key.json << 'EOF'
+          {
+            "type": "service_account",
+            "project_id": "ci",
+            "private_key_id": "ci",
+            "private_key": "-----BEGIN RSA PRIVATE KEY-----\nMIIEogIBAAKCAQEA0Z3VS5JJ\n-----END RSA PRIVATE KEY-----\n",
+            "client_email": "ci@ci.iam.gserviceaccount.com",
+            "client_id": "123456789",
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+            "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/ci%40ci.iam.gserviceaccount.com"
+          }
+          EOF
 
       - name: Install backend dependencies
         working-directory: ./backend
-        run: npm install
+        run: npm ci
 
-      - name: Run backend tests
+      - name: Build backend
         working-directory: ./backend
-        run: npm test
+        run: npm run build
 
-      - name: Generate backend coverage
+      - name: Backend unit and integration tests with coverage
         working-directory: ./backend
-        run: npm run test:coverage
+        run: >-
+          npm run test:coverage --
+          --coverageReporters=lcov
+          --coverageReporters=text-summary
+          --coverageReporters=text
+
+      - name: Upload backend coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-coverage
+          path: backend/coverage/
 
       - name: Install frontend dependencies
         working-directory: ./frontend
-        run: npm install
+        run: npm ci
 
-      - name: Run frontend tests
+      - name: Build frontend
         working-directory: ./frontend
-        run: npm test -- --watchAll=false
+        run: npm run build
 
-      - name: Generate frontend coverage
+      - name: Frontend unit tests with coverage
         working-directory: ./frontend
-        run: npm run test:coverage -- --watchAll=false
+        run: >-
+          npm run test:coverage --
+          --watchAll=false
+          --coverageReporters=lcov
+          --coverageReporters=text-summary
+
+      - name: Upload frontend coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/
+
+      - name: Install Playwright Chromium
+        working-directory: ./frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: End-to-end tests
+        working-directory: ./frontend
+        run: npm run test:e2e
