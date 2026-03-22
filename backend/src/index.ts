@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { db } from "./firebaseAdmin";
 import { MoodAnalyzer } from './services/MoodAnalyzer';
+import { createApp } from "./app";
 
 dotenv.config();
 
@@ -17,6 +18,7 @@ app.use(express.json());
 app.get('/', (req: Request, res: Response) => {
   res.send('MoodFLOW Backend API');
 });
+const app = createApp(analyzer);
 
 app.listen(port, () => {
   console.log(`Server is running at http://localhost:${port}`);
