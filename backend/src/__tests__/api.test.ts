@@ -1,14 +1,14 @@
 import request from "supertest";
-import express from "express";
+import { createApp } from "../app";
 
 describe("GET /", () => {
-  const app = express();
-
-  app.get("/", (req, res) => {
-    res.send("MoodFLOW Backend API");
-  });
-
   it("should return the API message", async () => {
+    const fakeAnalyzer = {
+      getAugmentedMoodScore: jest.fn(),
+    } as any;
+
+    const app = createApp(fakeAnalyzer);
+
     const res = await request(app).get("/");
 
     expect(res.status).toBe(200);

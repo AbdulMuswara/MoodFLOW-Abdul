@@ -1,52 +1,226 @@
 "use client"; 
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 import { useEffect, useState } from "react";
-import { auth } from "@/lib/firebase";
-import DashboardHeader from "@/components/DashboardHeader";
+import { useRouter } from "next/navigation";
+import { auth, db } from "@/lib/firebase";
+import AvatarDropdown from "@/components/AvatarDropdown";
+import Link from "next/link";
+import Navbar from "@/components/Navbar";
+import {
+  collection,
+  addDoc,
+  serverTimestamp,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  orderBy,
+  limit
+} from "firebase/firestore";
+
+
+type RecentEntry = {
+  id: string;
+  emojiScore: number;
+  note: string;
+  date: any;
+};
+
+const emojiMap: Record<number, string> = {
+  1: "😞",
+  2: "🙁",
+  3: "😐",
+  4: "🙂",
+  5: "😄",
+};
+
+function formatEntryDate(date: any) {
+  if (!date) return "No date";
+  if (typeof date.toDate === "function") {
+    return date.toDate().toLocaleDateString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+  }
+  return "No date";
+}
+
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [user, setUser] = useState<any>(null); // use this to define the current user
+  const [recentEntries, setRecentEntries] = useState<RecentEntry[]>([]);
+  const [emojiScore, setEmojiScore] = useState<number | null>(null);
+  const [userInput, setUserInput] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        const docRef = doc(db, "users", currentUser.uid);
+        const docSnap = await getDoc(docRef);
+  
+        if (docSnap.exists()) {
+          const userData = docSnap.data();
+          setEmail(userData.email);
+          setUsername(userData.username);
+        }
+      }
+  
       setUser(currentUser);
     });
   
     return () => unsubscribe();
   }, []);
 
+  const handleLogout = async () => {
+    await signOut(auth);
+    router.push('/');
+  };
+
+  useEffect(() => {
+  if (!user) {
+    setRecentEntries([]);
+    return;
+  }
+
+  const fetchRecentEntries = async () => {
+    try {
+      const ref = collection(db, "users", user.uid, "moodEntries");
+      const q = query(ref, orderBy("date", "desc"), limit(3));
+      const snap = await getDocs(q);
+
+      const data = snap.docs.map((doc) => ({
+        id: doc.id,
+        ...(doc.data() as Omit<RecentEntry, "id">),
+      }));
+
+      setRecentEntries(data);
+    } catch (err) {
+      console.error("Failed to fetch recent entries:", err);
+    }
+  };
+
+  fetchRecentEntries();
+}, [user, saved]);
 
   const moods = [
-    { label: "Very Bad", symbol: "😞", color: "border-amber-300" },
-    { label: "Bad", symbol: "🙁", color: "border-rose-300" },
-    { label: "Neutral", symbol: "😐", color: "border-slate-300" },
-    { label: "Good", symbol: "🙂", color: "border-emerald-300" },
-    { label: "Excellent", symbol: "😄", color: "border-indigo-300" }
+    { label: "Very Bad", symbol: "😞", color: "border-amber-300", score: 1},
+    { label: "Bad", symbol: "🙁", color: "border-rose-300", score: 2 },
+    { label: "Neutral", symbol: "😐", color: "border-slate-300", score: 3 },
+    { label: "Good", symbol: "🙂", color: "border-emerald-300", score: 4 },
+    { label: "Excellent", symbol: "😄", color: "border-indigo-300", score: 5 }
   ];
 
-  const recentEntries = [
-    {
-      date: "March 1, 2026",
-      mood: "😄",
-      text: "Finished my CSC-456 project proposal. Feeling accomplished!"
-    },
-    {
-      date: "February 20, 2026",
-      mood: "🙂",
-      text: "Studied for midterms. Long day but made progress."
-    },
-    {
-      date: "February 28, 2026",
-      mood: "😐",
-      text: "Had a productive study session at the library."
+  const today = new Date().toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  const handleSave = async () => {
+    
+    setError("");
+    setSaved(false);
+    setSaving(true);
+
+    try {
+      if (!user) {
+        setError("User not authenticated");
+        setSaving(false);
+        return;
+      }
+
+      if (emojiScore === null && userInput.trim() === "") {
+        setError("No input provided");
+        setSaving(false);
+        return;
+      }
+
+      if (emojiScore === null) {
+        setError("No emoji rating provided");
+        setSaving(false);
+        return;
+      }
+
+      if (userInput.trim() === "") {
+        setError("No note provided");
+        setSaving(false);
+        return;
+      }
+
+      const response = await fetch("http://localhost:3001/analyzeMood", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: userInput,
+          emojiScore: emojiScore,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to analyze mood");
+      }
+
+      const moodScore = data.moodScore;
+
+      const moodRef = collection(db, "users", user.uid, "moodEntries");
+      await addDoc(moodRef, {
+        emojiScore: emojiScore,
+        moodScore: moodScore,
+        note: userInput,
+        date: serverTimestamp(),
+      });
+
+      setSaved(true);
+      setEmojiScore(null);
+      setUserInput("");
+
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Something went wrong");
+      }
+    } finally {
+      setSaving(false);
     }
-  ];
+  };
+
+  useEffect(() => {
+    if (saved) {
+      const timer = setTimeout(() => setSaved(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [saved]);
 
   const ranges = ["7 Days", "30 Days", "90 Days", "All Time"];
 
   return (
     <main className="min-h-screen bg-slate-50 dark:bg-slate-950 font-sans text-slate-900 dark:text-slate-50">
-      <DashboardHeader />
+      
+      <div className="fixed top-0 left-0 right-0 z-50 px-6 py-4 flex justify-between">
+      
+          <Link href="/" className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center text-white font-bold text-xl">
+              M
+            </div>
+            <span className="font-display font-bold text-xl tracking-tight">MoodFLOW</span>
+          </Link>
+
+          <AvatarDropdown user={user} open={open} setOpen={setOpen} onLogout={handleLogout} />
+
+      </div>
 
       <div className="pt-20 pb-16 px-6">
         <div className="max-w-7xl mx-auto space-y-8">
@@ -100,7 +274,12 @@ export default function DashboardPage() {
                         <button
                           key={mood.label}
                           type="button"
-                          className={`relative flex flex-col items-center justify-center gap-2 rounded-2xl border-2 ${mood.color} bg-slate-50/80 dark:bg-slate-950/60 py-4 text-sm font-medium hover:-translate-y-1 hover:shadow-lg transition-all`}
+                          className={`relative flex flex-col items-center justify-center gap-2 rounded-2xl border-2 ${mood.color} bg-slate-50/80 dark:bg-slate-950/60 py-4 text-sm font-medium hover:-translate-y-1 hover:shadow-lg transition-all
+                            ${emojiScore === mood.score 
+                              ? "scale-105 shadow-xl -translate-y-1"
+                              : "hover:-translate-y-1 hover:shadow-lg"
+                            }`}
+                          onClick={() => {setEmojiScore(emojiScore === mood.score ? null : mood.score);}}
                         >
                           <span className="text-xl">{mood.symbol}</span>
                           <span className="text-[11px] text-slate-500 dark:text-slate-400">
@@ -121,7 +300,19 @@ export default function DashboardPage() {
                       rows={4}
                       placeholder="Write your notes here..."
                       className="w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/80 px-4 py-3 text-sm resize-none placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/60 focus:border-brand-500/60"
+                      value={userInput} 
+                      onChange={(e) => setUserInput(e.target.value)}
                     />
+                    { error &&
+                    <p className="mt-1 ml-2 text-sm text-red-500 font-medium">
+                      {error}
+                    </p>
+                    }
+                    { saved &&
+                      <p className="mt-1 ml-2 text-sm text-green-500 font-medium">
+                       Entry saved.
+                      </p>
+                    }
                   </div>
 
                   {/* Date + action */}
@@ -131,11 +322,15 @@ export default function DashboardPage() {
                         <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">
                           Date
                         </p>
-                        <p className="text-sm font-medium">Today · March 2, 2026</p>
+                        <p className="text-sm font-medium">Today · {today}</p>
                       </div>
                     </div>
-                    <button className="inline-flex items-center justify-center px-6 md:px-8 py-3 rounded-2xl text-sm md:text-base font-semibold text-white bg-gradient-brand shadow-lg shadow-brand-600/30 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all">
-                      Save Entry
+                    <button 
+                      onClick={handleSave}
+                      disabled={saving}
+                      className="inline-flex items-center justify-center px-6 md:px-8 py-3 rounded-2xl text-sm md:text-base font-semibold text-white bg-gradient-brand shadow-lg shadow-brand-600/30 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all"
+                    >
+                      {saving ? "Saving..." : "Save Entry"}
                     </button>
                   </div>
                 </div>
@@ -148,33 +343,44 @@ export default function DashboardPage() {
                     <span className="w-2 h-2 rounded-full bg-blue-500" />
                     Recent Entries
                   </h2>
-                  <span className="text-xs text-slate-400">Last 3 days logged</span>
+                  <button
+                    type="button"
+                    onClick={() => router.push("/dashboard/history")}
+                    className="text-xs text-brand-500 hover:text-brand-600 hover:underline font-medium transition-colors"
+                  >
+                    View All →
+                  </button>
                 </div>
 
                 <div className="px-6 py-4 space-y-4">
-                  {recentEntries.map((entry, idx) => (
-                    <article
-                      key={idx}
-                      className="flex items-start gap-4 rounded-2xl border border-slate-100 dark:border-slate-900 bg-slate-50/80 dark:bg-slate-950/60 px-4 py-3"
-                    >
-                      <div className="mt-1 flex h-10 w-10 items-center justify-center rounded-2xl bg-white dark:bg-slate-900 text-xl shadow-sm">
-                        {entry.mood}
+                  {recentEntries.length === 0 ? (
+                    <div className="rounded-2xl border border-slate-100 dark:border-slate-900 bg-slate-50/80 dark:bg-slate-950/60 px-4 py-6 text-sm text-slate-500 dark:text-slate-400">
+                      No mood entries yet. Save your first entry above.
                       </div>
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between gap-3 mb-1.5">
-                          <p className="text-xs font-semibold px-2 py-1 rounded-full bg-slate-900 text-slate-50">
-                            {entry.date}
-                          </p>
-                          <div className="flex items-center gap-1.5 text-slate-400">
-                            <div className="w-6 h-6 rounded-full border border-slate-300 dark:border-slate-700" />
-                          </div>
+                  ) : (
+                    recentEntries.map((entry) => (
+                      <article
+                        key={entry.id}
+                        className="flex items-start gap-4 rounded-2xl border border-slate-100 dark:border-slate-900 bg-slate-50/80 dark:bg-slate-950/60 px-4 py-3"
+                      >
+                        <div className="mt-1 flex h-10 w-10 items-center justify-center rounded-2xl bg-white dark:bg-slate-900 text-xl shadow-sm">
+                          {emojiMap[entry.emojiScore] ?? "🙂"}
                         </div>
-                        <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-                          {entry.text}
-                        </p>
-                      </div>
-                    </article>
-                  ))}
+
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between gap-3 mb-1.5">
+                            <p className="text-xs font-semibold px-2 py-1 rounded-full bg-slate-900 text-slate-50">
+                              {formatEntryDate(entry.date)}
+                            </p>
+                          </div>
+
+                          <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                            {entry.note}
+                          </p>
+                        </div>
+                      </article>
+                    ))
+                  )}
                 </div>
               </section>
             </div>

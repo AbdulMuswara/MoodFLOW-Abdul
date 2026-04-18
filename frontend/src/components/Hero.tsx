@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 export default function Hero() {
   return (
     <section className="relative pt-32 pb-20 px-6 overflow-hidden">
@@ -19,12 +21,12 @@ export default function Hero() {
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-20">
-          <button className="w-full sm:w-auto px-8 py-4 text-white bg-brand-600 hover:bg-brand-500 rounded-2xl font-bold shadow-xl shadow-brand-600/25 transition-all hover:-translate-y-1 active:scale-95">
+          <Link href="/signup" className="w-full sm:w-auto px-8 py-4 text-white bg-brand-600 hover:bg-brand-500 rounded-2xl font-bold shadow-xl shadow-brand-600/25 transition-all hover:-translate-y-1 active:scale-95 inline-block">
             Start Tracking Free
-          </button>
-          <button className="w-full sm:w-auto px-8 py-4 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900 rounded-2xl font-bold transition-all">
+          </Link>
+          <Link href="/#how-it-works" className="w-full sm:w-auto px-8 py-4 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900 rounded-2xl font-bold transition-all inline-block">
             Learn More
-          </button>
+          </Link>
         </div>
 
         {/* Dashboard Mockup */}

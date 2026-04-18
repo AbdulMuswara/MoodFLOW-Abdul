@@ -5,9 +5,14 @@ import { useState } from "react";
 import { Mail, Lock } from "lucide-react";
 import { auth, db } from "../../lib/firebase";
 import { useRouter } from "next/navigation";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import {
+  GoogleAuthProvider,
+  sendEmailVerification,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+} from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
 
 export default function SignInPage() {
   const [email, setEmail] = useState("");
@@ -18,22 +23,35 @@ export default function SignInPage() {
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    console.log({ email, password });
 
     setError(null);
     setLoading(true);
 
     try {
-      await signInWithEmailAndPassword(
-        auth,
-        email,
-        password
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      await user.reload();
+
+      if (!user.emailVerified) {
+        await sendEmailVerification(user);
+        await signOut(auth);
+        router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+        return;
+      }
+
+      await setDoc(
+        doc(db, "users", user.uid),
+        {
+          uid: user.uid,
+          email: user.email,
+          verify: true,
+        },
+        { merge: true }
       );
 
-      router.push("/dashboard");
-
+      router.push("/");
     } catch (err: any) {
-      console.log(err.message);
       if (err.code === "auth/invalid-credential") {
         setError("Invalid email or password.");
       } else {
@@ -42,29 +60,28 @@ export default function SignInPage() {
     } finally {
       setLoading(false);
     }
-
   }
 
   async function handleGoogleSignIn() {
     setError(null);
     setLoading(true);
-  
+
     try {
       const provider = new GoogleAuthProvider();
-  
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
-  
-      await setDoc(doc(db, "users", user.uid), {
+
+      await setDoc(
+        doc(db, "users", user.uid),
+        {
           uid: user.uid,
           email: user.email,
-          createdAt: serverTimestamp()
+          verify: user.emailVerified,
         },
         { merge: true }
       );
-  
-      router.push("/dashboard");
-  
+
+      router.push("/");
     } catch (err: any) {
       setError("Google sign-in failed.");
     } finally {
@@ -99,7 +116,7 @@ export default function SignInPage() {
               <label className="block text-sm font-semibold text-slate-700 mb-2">
                 Email address
               </label>
-              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 focus-within:ring-2 focus-within:ring-violet-500/20 focus-within:border-violet-400 transition">
+              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4">
                 <Mail className="w-5 h-5 text-slate-400" />
                 <input
                   type="email"
@@ -116,7 +133,7 @@ export default function SignInPage() {
               <label className="block text-sm font-semibold text-slate-700 mb-2">
                 Password
               </label>
-              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 focus-within:ring-2 focus-within:ring-violet-500/20 focus-within:border-violet-400 transition">
+              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4">
                 <Lock className="w-5 h-5 text-slate-400" />
                 <input
                   type="password"
@@ -130,15 +147,13 @@ export default function SignInPage() {
             </div>
 
             {error && (
-              <p className="mt-1 text-sm text-red-500 font-medium">
-                {error}
-              </p>
+              <p className="mt-1 text-sm text-red-500 font-medium">{error}</p>
             )}
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-2xl bg-gradient-to-r from-violet-600 to-fuchsia-500 py-4 text-white font-semibold text-lg shadow-[0_12px_30px_rgba(139,92,246,0.28)] hover:scale-[1.01] transition"
+              className="w-full rounded-2xl bg-gradient-to-r from-violet-600 to-fuchsia-500 py-4 text-white font-semibold text-lg"
             >
               {loading ? "Signing In..." : "Sign In"}
             </button>

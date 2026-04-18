@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 export default function CTASection() {
   return (
     <section className="px-6 py-20">
@@ -13,9 +15,9 @@ export default function CTASection() {
               Join students who are already tracking their way to better self-awareness.
               Start your journey today.
             </p>
-            <button className="px-10 py-4 bg-white text-brand-600 hover:bg-slate-50 rounded-2xl font-bold transition-all shadow-xl hover:-translate-y-1 active:scale-95">
+            <Link href="/signup" className="px-10 py-4 bg-white text-brand-600 hover:bg-slate-50 rounded-2xl font-bold transition-all shadow-xl hover:-translate-y-1 active:scale-95 inline-block">
               Get Started - It's Free
-            </button>
+            </Link>
           </div>
         </div>
       </div>

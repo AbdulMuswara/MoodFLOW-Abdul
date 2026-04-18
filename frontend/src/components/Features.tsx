@@ -21,7 +21,7 @@ export default function Features() {
   ];
 
   return (
-    <section className="py-24 px-6 bg-slate-50 dark:bg-slate-950/50">
+    <section id="features" className="py-24 px-6 bg-slate-50 dark:bg-slate-950/50">
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-16">
           <h2 className="text-3xl md:text-5xl font-display font-bold mb-4">Simple. Powerful. Insightful.</h2>

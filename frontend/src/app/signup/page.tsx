@@ -4,25 +4,30 @@ import Link from "next/link";
 import { useState } from "react";
 import { Mail, Lock } from "lucide-react";
 import { auth, db } from "../../lib/firebase";
-import { createUserWithEmailAndPassword } from "firebase/auth";
+import {
+  createUserWithEmailAndPassword,
+  GoogleAuthProvider,
+  sendEmailVerification,
+  signInWithPopup,
+} from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
-import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
-
 
 export default function SignUpPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [username, setUsername] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    console.log({ email, password });
 
     setError(null);
+    setMessage(null);
     setLoading(true);
 
     if (password !== confirmPassword) {
@@ -39,16 +44,21 @@ export default function SignUpPage() {
       );
 
       const user = userCredential.user;
+
       await setDoc(doc(db, "users", user.uid), {
         uid: user.uid,
         email: user.email,
-        createdAt: serverTimestamp()
+        username: username || "Anonymous",
+        verify: false,
+        createdAt: serverTimestamp(),
       });
 
-      router.push("/dashboard");
+      await sendEmailVerification(user);
 
+      setMessage("Account created. Please verify your email before signing in.");
+      router.push(`/verify-email?email=${encodeURIComponent(email)}`);
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || "Failed to create account.");
     } finally {
       setLoading(false);
     }
@@ -56,6 +66,7 @@ export default function SignUpPage() {
 
   async function handleGoogleSignUp() {
     setError(null);
+    setMessage(null);
     setLoading(true);
 
     try {
@@ -63,17 +74,21 @@ export default function SignUpPage() {
       const userCredential = await signInWithPopup(auth, provider);
       const user = userCredential.user;
 
-      await setDoc(doc(db, "users", user.uid), {
-        uid: user.uid,
-        email: user.email,
-        createdAt: serverTimestamp()
-      });
+      await setDoc(
+        doc(db, "users", user.uid),
+        {
+          uid: user.uid,
+          email: user.email,
+          username: user.displayName || "Anonymous",
+          verify: user.emailVerified,
+          createdAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
 
-      router.push("/dashboard");
-
-
+      router.push("/");
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || "Google sign-up failed.");
     } finally {
       setLoading(false);
     }
@@ -104,9 +119,25 @@ export default function SignUpPage() {
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Username
+              </label>
+              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                <input
+                  type="text"
+                  placeholder="Username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full bg-transparent outline-none text-slate-700 placeholder:text-slate-400"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
                 Email address
               </label>
-              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 focus-within:ring-2 focus-within:ring-violet-500/20 focus-within:border-violet-400 transition">
+              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4">
                 <Mail className="w-5 h-5 text-slate-400" />
                 <input
                   type="email"
@@ -123,7 +154,7 @@ export default function SignUpPage() {
               <label className="block text-sm font-semibold text-slate-700 mb-2">
                 Password
               </label>
-              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 focus-within:ring-2 focus-within:ring-violet-500/20 focus-within:border-violet-400 transition">
+              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4">
                 <Lock className="w-5 h-5 text-slate-400" />
                 <input
                   type="password"
@@ -140,11 +171,11 @@ export default function SignUpPage() {
               <label className="block text-sm font-semibold text-slate-700 mb-2">
                 Confirm Password
               </label>
-              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 focus-within:ring-2 focus-within:ring-violet-500/20 focus-within:border-violet-400 transition">
+              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4">
                 <Lock className="w-5 h-5 text-slate-400" />
                 <input
                   type="password"
-                  placeholder="Password"
+                  placeholder="Confirm Password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   className="w-full bg-transparent outline-none text-slate-700 placeholder:text-slate-400"
@@ -154,20 +185,20 @@ export default function SignUpPage() {
             </div>
 
             {error && (
-              <p className="mt-1 text-sm text-red-500 font-medium">
-                {error}
-              </p>
+              <p className="mt-1 text-sm text-red-500 font-medium">{error}</p>
+            )}
+
+            {message && (
+              <p className="mt-1 text-sm text-emerald-600 font-medium">{message}</p>
             )}
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-4 rounded-2xl bg-gradient-to-r from-violet-600 to-fuchsia-500 py-4 text-white font-semibold text-lg shadow-[0_12px_30px_rgba(139,92,246,0.28)] hover:scale-[1.01] transition"
+              className="w-full mt-4 rounded-2xl bg-gradient-to-r from-violet-600 to-fuchsia-500 py-4 text-white font-semibold text-lg"
             >
               {loading ? "Creating account..." : "Sign Up"}
             </button>
-
-            
           </form>
 
           <div className="flex items-center gap-4 my-8">
@@ -183,7 +214,7 @@ export default function SignUpPage() {
           >
             Sign up with Google
           </button>
-          
+
           <div className="text-center mt-4">
             <Link
               href="/login"

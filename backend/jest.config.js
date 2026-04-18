@@ -8,4 +8,13 @@ module.exports = {
   transform: {
     ...tsJestTransformCfg,
   },
+
+  collectCoverage: true,
+  collectCoverageFrom: [
+    "src/**/*.{ts,js}",
+    "!src/**/*.test.{ts,js}",
+    "!src/**/__tests__/**",
+    "!src/index.ts",
+    "!src/firebaseAdmin.ts",
+  ],
 };

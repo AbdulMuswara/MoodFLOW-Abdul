@@ -10,10 +10,10 @@ describe('Hero', () => {
     ).toBeInTheDocument()
   })
 
-  it('renders CTA buttons', () => {
-  render(<Hero />)
+  it('renders CTA links', () => {
+    render(<Hero />)
 
-  expect(screen.getByRole('button', { name: /start tracking free/i })).toBeEnabled()
-  expect(screen.getByRole('button', { name: /learn more/i })).toBeInTheDocument()
-})
+    expect(screen.getByRole('link', { name: /start tracking free/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /learn more/i })).toBeInTheDocument()
+  })
 })
