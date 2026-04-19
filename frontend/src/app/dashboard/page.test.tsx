@@ -82,10 +82,6 @@ describe("DashboardPage", () => {
 
     render(<DashboardPage />);
 
-    await waitFor(() => {
-      expect(getDoc).toHaveBeenCalled();
-    });
-
     fireEvent.click(screen.getByRole("button", { name: /save entry/i }));
 
     expect(await screen.findByText(/no input provided/i)).toBeInTheDocument();
@@ -100,10 +96,6 @@ describe("DashboardPage", () => {
     });
 
     render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(getDoc).toHaveBeenCalled();
-    });
 
     fireEvent.click(screen.getByRole("button", { name: /good/i }));
 

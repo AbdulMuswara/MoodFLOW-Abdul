@@ -37,17 +37,9 @@ export default function Navbar() {
         </div>
 
         {user ? (
-          <>
-            <div className="hidden md:flex items-center gap-8 text-slate-600 dark:text-slate-300 font-medium">
-              <Link href="/dashboard" className="hover:text-brand-600 transition-colors">Dashboard</Link>
-              <Link href="/dashboard/profile" className="hover:text-brand-600 transition-colors">Profile</Link>
-              <Link href="/settings" className="hover:text-brand-600 transition-colors">Settings</Link>
-            </div>
-
             <div className="flex items-center gap-3">
               <AvatarDropdown user={user} open={open} setOpen={setOpen} onLogout={handleSignOut} />
             </div>
-          </>
         ) : (
           <>
             <div className="hidden md:flex items-center gap-8 text-slate-600 dark:text-slate-300 font-medium">

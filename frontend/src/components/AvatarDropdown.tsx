@@ -1,14 +1,14 @@
-import { User, Settings, LogOut } from "lucide-react"
+"use client"
+import { User, Settings, LogOut, LayoutDashboard } from "lucide-react"
 import Link from 'next/link';
 import { useState, useEffect, useRef } from "react";
-import { auth, db } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { 
-    collection, 
-    addDoc, 
-    serverTimestamp, 
     doc, 
     getDoc 
   } from "firebase/firestore";
+import { usePathname } from 'next/navigation'
+
 
 export default function AvatarDropdown({ 
     user,
@@ -18,8 +18,11 @@ export default function AvatarDropdown({
         user: any,
         open: boolean, 
         setOpen: (prev: boolean) => void ,
-        onLogout: () => void;
+        onLogout: () => void,
     }) {
+
+    const pathname = usePathname();
+    const page = pathname.split('/').filter(Boolean).pop();
 
     const [username, setUsername] = useState("");
     const [email, setEmail] = useState("");
@@ -56,6 +59,27 @@ export default function AvatarDropdown({
         };
     }, []);
 
+    const rows = [
+        {
+            "page": "dashboard",
+            "href": "/dashboard",
+            "name": "Dashboard",
+            "icon": LayoutDashboard
+        },
+        {
+            "page": "profile",
+            "href": "/dashboard/profile",
+            "name": "Profile",
+            "icon": User
+        },
+        {
+            "page": "settings",
+            "href": "/settings",
+            "name": "Settings",
+            "icon": Settings
+        },
+    ];
+
     return (
         <div ref={dropdownRef} className="relative">
           <button
@@ -72,20 +96,20 @@ export default function AvatarDropdown({
                 <p className="text-sm font-medium text-gray-900">{username}</p>
                 <p className="text-xs text-gray-500 mt-0.5">{email}</p>
             </div>
-      
-            <Link href='/dashboard/profile'>
-                <button className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 border-b border-gray-100">
-                    <User className="w-4 h-4" />
-                    Profile
-                </button>
-            </Link>
 
-            <Link href="/settings">
-                <button className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 border-b border-gray-100">
-                <Settings className="w-4 h-4" />
-                Settings
-                </button>
-            </Link>
+            {rows.filter((row) => row.page !== page)
+            .map((row) => {
+                const Icon = row.icon
+
+                return (
+                <Link key={row.page} href={row.href}>
+                    <button className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 border-b border-gray-100">
+                    <Icon className="w-4 h-4" />
+                    {row.name}
+                    </button>
+                </Link>
+                )
+            })}
 
             <button 
                 onClick={onLogout}

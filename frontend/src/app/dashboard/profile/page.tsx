@@ -9,6 +9,7 @@ import type { Timestamp } from "firebase/firestore";
 
 import Navbar from "@/components/Navbar";
 import { auth, db } from "@/lib/firebase";
+import { formatMemberSince, initials } from "@/lib/profileDisplayUtils";
 
 type UserDoc = {
   username?: string;
@@ -17,28 +18,6 @@ type UserDoc = {
   bio?: string;
   createdAt?: Timestamp;
 };
-
-function formatMemberSince(createdAt?: Timestamp): string {
-  if (!createdAt?.toDate) return "—";
-  try {
-    return createdAt.toDate().toLocaleDateString("en-US", {
-      month: "short",
-      year: "numeric",
-    });
-  } catch {
-    return "—";
-  }
-}
-
-function initials(first: string, last: string, fallback: string): string {
-  const a = first.trim().charAt(0);
-  const b = last.trim().charAt(0);
-  if (a && b) return (a + b).toUpperCase();
-  if (a) return a.toUpperCase();
-  const f = fallback.trim();
-  if (f.length >= 2) return f.slice(0, 2).toUpperCase();
-  return f.charAt(0).toUpperCase() || "?";
-}
 
 export default function ProfilePage() {
   const router = useRouter();

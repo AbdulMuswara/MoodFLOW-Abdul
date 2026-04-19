@@ -19,7 +19,9 @@ const customJestConfig = {
     "!src/**/*.test.{js,jsx,ts,tsx}",
     "!src/**/__tests__/**",
     "!src/app/layout.tsx",
-    "!src/lib/**"
+    "!src/lib/firebase/**",
+    "!src/lib/firebase.ts",
+    "!src/lib/authProviders.ts"
   ]
 };
 
