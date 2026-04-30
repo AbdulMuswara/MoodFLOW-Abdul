@@ -1,5 +1,3 @@
-import { pipeline } from "@xenova/transformers";
-
 export class MoodAnalyzer {
     private classifier: any = null;
 
@@ -9,6 +7,7 @@ export class MoodAnalyzer {
 
     async init() {
         if (!this.classifier) {
+          const { pipeline } = await import("@xenova/transformers");
           this.classifier = await pipeline(
             "text-classification",
             "Xenova/distilbert-base-uncased-finetuned-sst-2-english"
