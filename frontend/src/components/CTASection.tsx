@@ -16,7 +16,7 @@ export default function CTASection() {
               Start your journey today.
             </p>
             <Link href="/signup" className="px-10 py-4 bg-white text-brand-600 hover:bg-slate-50 rounded-2xl font-bold transition-all shadow-xl hover:-translate-y-1 active:scale-95 inline-block">
-              Get Started - It's Free
+              Get Started - It&apos;s Free
             </Link>
           </div>
         </div>

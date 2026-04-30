@@ -8,8 +8,9 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 import type { Timestamp } from "firebase/firestore";
 
 import Navbar from "@/components/Navbar";
-import { auth, db } from "@/lib/firebase";
+import { auth, db, storage } from "@/lib/firebase";
 import { formatMemberSince, initials } from "@/lib/profileDisplayUtils";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 type UserDoc = {
   username?: string;
@@ -17,6 +18,7 @@ type UserDoc = {
   lastName?: string;
   bio?: string;
   createdAt?: Timestamp;
+  profilePicture?: string;
 };
 
 export default function ProfilePage() {
@@ -29,18 +31,21 @@ export default function ProfilePage() {
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
   const [email, setEmail] = useState("");
+  const [profilePicture, setProfilePicture] = useState<string | null>(null);
 
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const baselineRef = useRef({
     firstName: "",
     lastName: "",
     displayName: "",
     bio: "",
+    profilePicture: null as string | null,
   });
 
   const applyBaseline = useCallback(() => {
@@ -49,6 +54,7 @@ export default function ProfilePage() {
     setLastName(b.lastName);
     setDisplayName(b.displayName);
     setBio(b.bio);
+    setProfilePicture(b.profilePicture);
   }, []);
 
   useEffect(() => {
@@ -80,6 +86,7 @@ export default function ProfilePage() {
         const ln = data.lastName ?? "";
         const dn = data.username ?? authUser.displayName ?? "";
         const bi = data.bio ?? "";
+        const pfp = data.profilePicture ?? null;
 
         if (cancelled) return;
 
@@ -87,11 +94,13 @@ export default function ProfilePage() {
         setLastName(ln);
         setDisplayName(dn);
         setBio(bi);
+        setProfilePicture(pfp);
         baselineRef.current = {
           firstName: fn,
           lastName: ln,
           displayName: dn,
           bio: bi,
+          profilePicture: pfp,
         };
         setMemberSinceTs(data.createdAt);
       } catch {
@@ -135,6 +144,7 @@ export default function ProfilePage() {
         lastName: lastName.trim(),
         displayName: username,
         bio: bio.trim(),
+        profilePicture: profilePicture,
       };
       setDisplayName(username);
       setSaved(true);
@@ -172,6 +182,46 @@ export default function ProfilePage() {
         <p className="text-slate-500 text-sm">Loading…</p>
       </div>
     );
+  }
+
+  async function handleUpload(file: File) {
+    if (!authUser) return;
+
+    setUploading(true);
+  
+    if (!file.type.startsWith("image/")) {
+      alert("Please upload an image");
+      return;
+    }
+  
+    if (file.size > 2 * 1024 * 1024) {
+      alert("Max size is 2MB");
+      return;
+    }
+  
+    try {
+      const storageRef = ref(storage, `profilePictures/${authUser.uid}/avatar.jpg`);
+  
+      await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(storageRef);
+  
+      await setDoc(
+        doc(db, "users", authUser.uid),
+        {
+          profilePicture: url,
+        },
+        { merge: true }
+      );
+  
+      setAuthUser({ ...authUser, photoURL: url });
+      setProfilePicture(url);
+  
+    } catch (err) {
+      console.error(err);
+      alert("Upload failed");
+    } finally {
+      setUploading(false);
+    }
   }
 
   return (
@@ -231,10 +281,10 @@ export default function ProfilePage() {
                   </h2>
                   <div className="flex items-center gap-6">
                     <div className="relative shrink-0">
-                      {authUser.photoURL ? (
+                      {profilePicture || authUser.photoURL ? (
                         // eslint-disable-next-line @next/next/no-img-element -- OAuth avatar URLs are external
                         <img
-                          src={authUser.photoURL}
+                          src={profilePicture || authUser.photoURL!}
                           alt=""
                           className="w-20 h-20 rounded-full object-cover shadow-inner"
                         />
@@ -252,14 +302,23 @@ export default function ProfilePage() {
                         Member since {memberSince}
                       </p>
                       <div className="flex flex-wrap gap-3">
-                        <button
-                          type="button"
-                          disabled
-                          title="Photo upload is not available yet"
-                          className="px-4 py-1.5 bg-brand-600/50 text-white text-sm font-medium rounded-lg cursor-not-allowed opacity-70"
-                        >
-                          Upload photo
-                        </button>
+                        <label className={`px-4 py-1.5 text-white text-sm font-medium rounded-lg cursor-pointer hover:bg-brand-500
+                                            ${uploading 
+                                              ? "bg-brand-400 cursor-not-allowed" 
+                                              : "bg-brand-600 hover:bg-brand-500"
+                                            }`}>
+                          {uploading ? "Uploading..." : "Upload Photo"}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              if (e.target.files?.[0]) {
+                                handleUpload(e.target.files[0]);
+                              }
+                            }}
+                          />
+                        </label>
                         <button
                           type="button"
                           disabled

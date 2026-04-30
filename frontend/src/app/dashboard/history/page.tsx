@@ -8,10 +8,14 @@ import {
   getDocs,
   orderBy,
   query,
+  doc,
+  deleteDoc
 } from "firebase/firestore";
 
 import { auth, db } from "@/lib/firebase";
 import DashboardHeader from "@/components/DashboardHeader";
+import { MoreHorizontal } from "lucide-react";
+import { Trash2 } from "lucide-react";
 
 type MoodEntry = {
   id: string;
@@ -87,6 +91,9 @@ export default function MoodHistoryPage() {
   const [moodFilter, setMoodFilter] = useState(0);
   const [range, setRange] = useState("30 Days");
   const [page, setPage] = useState(1);
+  const [error, setError] = useState("");
+  const [deleted, setDeleted] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => setUser(u));
@@ -120,7 +127,7 @@ export default function MoodHistoryPage() {
     };
 
     fetchEntries();
-  }, [user]);
+  }, [user, deleted]);
 
   const now = new Date();
 
@@ -174,6 +181,50 @@ export default function MoodHistoryPage() {
     const d = toDate(e.date);
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   }).length;
+
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setOpenMenuId(null);
+    };
+  
+    if (openMenuId !== null) {
+      window.addEventListener("click", handleClickOutside);
+    }
+  
+    return () => {
+      window.removeEventListener("click", handleClickOutside);
+    };
+  }, [openMenuId]);
+
+  const handleDelete = async (entryId: string) => {
+    try {
+      if (!user) {
+        return;
+      }
+  
+      const entryRef = doc(db, "users", user.uid, "moodEntries", entryId);
+  
+      await deleteDoc(entryRef);
+  
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Failed to delete entry");
+      }
+      alert(error);
+    } finally {
+      setOpenMenuId(null);
+      setDeleted(true);
+    }
+  };
+
+  useEffect(() => {
+    if (deleted) {
+      const timer = setTimeout(() => setDeleted(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [deleted]);
 
   return (
     <main className="min-h-screen bg-slate-50 dark:bg-slate-950 font-sans text-slate-900 dark:text-slate-50">
@@ -298,6 +349,12 @@ export default function MoodHistoryPage() {
             </div>
           </section>
 
+          { deleted &&
+            <p className="rounded-2xl border border-red-200 dark:border-red-800 bg-red-50/80 dark:bg-red-900/20 px-4 py-3 text-sm text-red-600 m-4">
+              Entry deleted.
+            </p>
+          }
+
           <section className="rounded-3xl bg-white/80 dark:bg-slate-950/80 border border-slate-200/80 dark:border-slate-800/80 shadow-lg shadow-slate-900/5">
             <div className="px-6 py-5 space-y-4">
               {loading ? (
@@ -309,13 +366,14 @@ export default function MoodHistoryPage() {
                   No mood entries found for the selected filters.
                 </p>
               ) : (
+
                 pageSlice.map((entry) => {
                   const mood = moodStyles[entry.emojiScore] ?? moodStyles[3];
 
                   return (
                     <article
                       key={entry.id}
-                      className="rounded-2xl border border-slate-100 dark:border-slate-900 bg-slate-50/80 dark:bg-slate-950/60 p-4"
+                      className="relative rounded-2xl border border-slate-100 dark:border-slate-900 bg-slate-50/80 dark:bg-slate-950/60 p-4"
                     >
                       <div className="flex items-start gap-4">
                         <div
@@ -345,6 +403,32 @@ export default function MoodHistoryPage() {
                                 Score: {entry.moodScore.toFixed(2)}
                               </span>
                             )}
+
+                          <button
+                              onClick={(e) =>
+                                { e.stopPropagation();
+                                  setOpenMenuId(openMenuId === entry.id ? null : entry.id);
+                                }
+                              }
+                              className="ml-auto p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition"
+                            >
+                              <MoreHorizontal className="w-5 h-5 text-slate-500" />
+                            </button>
+                            
+                            {openMenuId === entry.id && (
+                              <div className="absolute top-10 -right-7 z-11 w-32 rounded-xl bg-white dark:bg-slate-900 shadow-lg border border-slate-200 dark:border-slate-800 p-2">
+                                
+                                <button
+                                  onClick={() => handleDelete(entry.id)}
+                                  className="flex w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600 justify-around items-center"
+                                >
+                                  <Trash2 className="w-4 h-4 text-red-500" />
+                                  Delete
+                                </button>
+
+                              </div>
+                            )}
+
                           </div>
 
                           <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">

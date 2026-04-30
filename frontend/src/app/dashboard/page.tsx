@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
 import AvatarDropdown from "@/components/AvatarDropdown";
 import Link from "next/link";
+import Navbar from "@/components/Navbar";
+import MoodChart from "@/components/MoodChart";
 import {
   collection,
   addDoc,
@@ -12,8 +14,12 @@ import {
   getDocs,
   query,
   orderBy,
-  limit
+  limit,
+  doc,
+  deleteDoc
 } from "firebase/firestore";
+import { MoreHorizontal } from "lucide-react";
+import { Trash2 } from "lucide-react";
 
 
 type RecentEntry = {
@@ -54,6 +60,12 @@ export default function DashboardPage() {
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [open, setOpen] = useState(false);
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [chartRange, setChartRange] = useState("7 Days");
+  const [chartData, setChartData] = useState<any[]>([]);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [deleted, setDeleted] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -92,7 +104,30 @@ export default function DashboardPage() {
   };
 
   fetchRecentEntries();
-}, [user, saved]);
+}, [user, saved, deleted]);
+
+  useEffect(() => {
+    if (!user) {
+      setChartData([]);
+      return;
+    }
+
+    const fetchChartData = async () => {
+      try {
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+        const response = await fetch(`${baseUrl}/mood-trends?uid=${user.uid}&range=${encodeURIComponent(chartRange)}`);
+        if (!response.ok) {
+           throw new Error("Network response was not ok");
+        }
+        const data = await response.json();
+        setChartData(data.chartData || []);
+      } catch (err) {
+        console.error("Failed to fetch chart entries:", err);
+      }
+    };
+
+    fetchChartData();
+  }, [user, saved, chartRange, deleted]);
 
   const moods = [
     { label: "Very Bad", symbol: "😞", color: "border-amber-300", score: 1},
@@ -139,7 +174,8 @@ export default function DashboardPage() {
         return;
       }
 
-      const response = await fetch("http://localhost:3001/analyzeMood", {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+      const response = await fetch(`${baseUrl}/analyzeMood`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -189,6 +225,50 @@ export default function DashboardPage() {
   }, [saved]);
 
   const ranges = ["7 Days", "30 Days", "90 Days", "All Time"];
+
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setOpenMenuId(null);
+    };
+  
+    if (openMenuId !== null) {
+      window.addEventListener("click", handleClickOutside);
+    }
+  
+    return () => {
+      window.removeEventListener("click", handleClickOutside);
+    };
+  }, [openMenuId]);
+
+  const handleDelete = async (entryId: string) => {
+    try {
+      if (!user) {
+        setError("User not authenticated");
+        return;
+      }
+  
+      const entryRef = doc(db, "users", user.uid, "moodEntries", entryId);
+  
+      await deleteDoc(entryRef);
+  
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Failed to delete entry");
+      }
+    } finally {
+      setOpenMenuId(null);
+      setDeleted(true);
+    }
+  };
+
+  useEffect(() => {
+    if (deleted) {
+      const timer = setTimeout(() => setDeleted(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [deleted]);
 
   return (
     <main className="min-h-screen bg-slate-50 dark:bg-slate-950 font-sans text-slate-900 dark:text-slate-50">
@@ -342,6 +422,11 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="px-6 py-4 space-y-4">
+                  { deleted &&
+                    <p className="rounded-2xl border border-red-200 dark:border-red-800 bg-red-50/80 dark:bg-red-900/20 px-4 py-3 text-sm text-red-600 m-4">
+                      Entry deleted.
+                    </p>
+                  }
                   {recentEntries.length === 0 ? (
                     <div className="rounded-2xl border border-slate-100 dark:border-slate-900 bg-slate-50/80 dark:bg-slate-950/60 px-4 py-6 text-sm text-slate-500 dark:text-slate-400">
                       No mood entries yet. Save your first entry above.
@@ -350,7 +435,7 @@ export default function DashboardPage() {
                     recentEntries.map((entry) => (
                       <article
                         key={entry.id}
-                        className="flex items-start gap-4 rounded-2xl border border-slate-100 dark:border-slate-900 bg-slate-50/80 dark:bg-slate-950/60 px-4 py-3"
+                        className="relative flex items-start gap-4 rounded-2xl border border-slate-100 dark:border-slate-900 bg-slate-50/80 dark:bg-slate-950/60 px-4 py-3"
                       >
                         <div className="mt-1 flex h-10 w-10 items-center justify-center rounded-2xl bg-white dark:bg-slate-900 text-xl shadow-sm">
                           {emojiMap[entry.emojiScore] ?? "🙂"}
@@ -361,6 +446,32 @@ export default function DashboardPage() {
                             <p className="text-xs font-semibold px-2 py-1 rounded-full bg-slate-900 text-slate-50">
                               {formatEntryDate(entry.date)}
                             </p>
+
+                            <button
+                              onClick={(e) =>
+                                { e.stopPropagation();
+                                  setOpenMenuId(openMenuId === entry.id ? null : entry.id);
+                                }
+                              }
+                              className="p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition"
+                            >
+                              <MoreHorizontal className="w-5 h-5 text-slate-500" />
+                            </button>
+
+                            {openMenuId === entry.id && (
+                              <div className="absolute top-10 -right-7 z-11 w-32 rounded-xl bg-white dark:bg-slate-900 shadow-lg border border-slate-200 dark:border-slate-800 p-2">
+                                
+                                <button
+                                  onClick={() => handleDelete(entry.id)}
+                                  className="flex w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600 justify-around items-center"
+                                >
+                                  <Trash2 className="w-4 h-4 text-red-500" />
+                                  Delete
+                                </button>
+
+                              </div>
+                            )}
+
                           </div>
 
                           <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
@@ -389,39 +500,31 @@ export default function DashboardPage() {
               </div>
 
               <div className="flex-1 flex flex-col px-6 pt-6 pb-4 gap-6">
-                <div className="relative flex-1 rounded-3xl border border-dashed border-slate-300 dark:border-slate-800 bg-gradient-to-t from-brand-50 via-white to-white dark:from-brand-950/40 dark:via-slate-950 dark:to-slate-950 overflow-hidden">
-                  <div className="absolute inset-x-6 top-4 flex items-center justify-between text-[11px] text-slate-400">
+                <div className="relative flex-1 rounded-3xl border border-dashed border-slate-300 dark:border-slate-800 bg-gradient-to-t from-brand-50 via-white to-white dark:from-brand-950/40 dark:via-slate-950 dark:to-slate-950 overflow-hidden flex flex-col min-h-[250px]">
+                  <div className="absolute inset-x-6 top-4 flex z-10 items-center justify-between text-[11px] text-slate-400 pointer-events-none">
                     <span>— Mood Level</span>
                     <span>Higher</span>
                   </div>
-                  {/* Simple illustrative graph */}
-                  <svg
-                    className="absolute inset-x-0 bottom-0 h-40 w-full text-brand-400/40"
-                    viewBox="0 0 100 40"
-                    preserveAspectRatio="none"
-                  >
-                    <path
-                      d="M0,35 Q15,20 30,28 T60,18 T100,22 L100,40 L0,40 Z"
-                      fill="currentColor"
-                    />
-                  </svg>
-                  <div className="absolute inset-0 bg-gradient-to-t from-brand-500/15 via-transparent to-transparent" />
+                  <div className="flex-1 w-full pt-12 pb-2 pr-4 z-10">
+                    <MoodChart data={chartData} />
+                  </div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-brand-500/5 via-transparent to-transparent pointer-events-none" />
                 </div>
 
                 <div className="flex flex-col gap-3">
                   <div className="flex items-center justify-between text-xs text-slate-400">
-                    <span>Past 7 days</span>
-                    <span>Prototype preview · static data</span>
+                    <span>{chartRange === "All Time" ? "All Time" : `Past ${chartRange}`}</span>
                   </div>
                   <div className="inline-flex flex-wrap gap-2">
-                    {ranges.map((range, idx) => (
+                    {ranges.map((range) => (
                       <button
                         key={range}
                         type="button"
-                        className={`px-3.5 py-1.5 rounded-full text-xs font-semibold border ${
-                          idx === 0
+                        onClick={() => setChartRange(range)}
+                        className={`px-3.5 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                          chartRange === range
                             ? "bg-brand-600 text-white border-brand-600 shadow-sm shadow-brand-600/30"
-                            : "border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 bg-slate-50/50 dark:bg-slate-950/50"
+                            : "border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 bg-slate-50/50 dark:bg-slate-950/50 hover:border-slate-300"
                         }`}
                       >
                         {range}
