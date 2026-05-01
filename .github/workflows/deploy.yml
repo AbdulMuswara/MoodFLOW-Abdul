@@ -1,0 +1,67 @@
+# Builds production artifacts for backend + frontend. Optionally pings Render deploy hooks.
+#
+# Secrets (optional, for manual redeploy from CI):
+#   RENDER_DEPLOY_HOOK_API   — Render dashboard → Web Service → Deploy Hook (backend)
+#   RENDER_DEPLOY_HOOK_WEB   — Deploy Hook URL for frontend service
+#
+# Frontend build needs the same Firebase NEXT_PUBLIC_* secrets as ci.yml (or build may fail).
+
+name: Application deployment
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Backend — install and build
+        working-directory: backend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Frontend — install and build
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
+          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
+          NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID }}
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+        run: |
+          npm ci
+          npm run build
+
+      - name: Trigger Render deploy hooks (push to main only, optional)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          HOOK_API: ${{ secrets.RENDER_DEPLOY_HOOK_API }}
+          HOOK_WEB: ${{ secrets.RENDER_DEPLOY_HOOK_WEB }}
+        run: |
+          if [ -n "$HOOK_API" ]; then
+            echo "Pinging backend deploy hook..."
+            curl -fsS -X POST "$HOOK_API"
+          fi
+          if [ -n "$HOOK_WEB" ]; then
+            echo "Pinging frontend deploy hook..."
+            curl -fsS -X POST "$HOOK_WEB"
+          fi
+          if [ -z "$HOOK_API" ] && [ -z "$HOOK_WEB" ]; then
+            echo "No RENDER_DEPLOY_HOOK_* secrets set — skipping. Render can still auto-deploy from Git."
+          fi
