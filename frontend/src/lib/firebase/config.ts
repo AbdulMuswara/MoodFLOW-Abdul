@@ -1,6 +1,9 @@
-import { initializeApp, getApps, getApp } from "firebase/app";
+import { getApp, getApps, initializeApp } from "firebase/app";
+import type { Auth } from "firebase/auth";
 import { getAuth } from "firebase/auth";
+import type { Firestore } from "firebase/firestore";
 import { getFirestore } from "firebase/firestore";
+import type { FirebaseStorage } from "firebase/storage";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
@@ -12,10 +15,15 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Initialize Firebase
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
+const isBrowser = typeof window !== "undefined";
+const app = isBrowser
+  ? getApps().length > 0
+    ? getApp()
+    : initializeApp(firebaseConfig)
+  : null;
+
+const auth = (app ? getAuth(app) : null) as Auth;
+const db = (app ? getFirestore(app) : null) as Firestore;
+const storage = (app ? getStorage(app) : null) as FirebaseStorage;
 
 export { app, auth, db, storage };
