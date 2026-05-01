@@ -18,8 +18,7 @@ import {
   doc,
   deleteDoc
 } from "firebase/firestore";
-import { MoreHorizontal } from "lucide-react";
-import { Trash2 } from "lucide-react";
+import { MoreHorizontal, Trash2, Download } from "lucide-react";
 
 
 type RecentEntry = {
@@ -48,6 +47,28 @@ function formatEntryDate(date: any) {
   }
   return "No date";
 }
+
+const exportToCSV = (data: any[], filename: string) => {
+  if (!data.length) return;
+
+  const headers = Object.keys(data[0]);
+  const csvRows = [
+    headers.join(","),
+    ...data.map(row =>
+      headers.map(field => JSON.stringify(row[field] ?? "")).join(",")
+    )
+  ];
+
+  const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+
+  URL.revokeObjectURL(url);
+};
 
 
 export default function DashboardPage() {
@@ -496,6 +517,20 @@ export default function DashboardPage() {
                   <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                     Visualize how your mood has changed over time.
                   </p>
+                </div>
+                <div className="relative group inline-block">
+                  <button 
+                    className="flex items-center justify-center p-2 rounded-lg bg-white border border-slate-200 hover:shadow-sm transition"
+                    onClick={() => exportToCSV(chartData,`MoodFLOW-${chartRange}.csv`)}
+                  >
+                    <Download className="w-4 h-4" />
+                  </button>
+
+                  <div className="absolute bottom-full mb-2 left-1/2 -translate-x-25
+                                  opacity-0 group-hover:opacity-100 transition
+                                  bg-slate-900 text-white text-xs px-2 py-1 rounded-md whitespace-nowrap pointer-events-none">
+                    Export this range as CSV
+                  </div>
                 </div>
               </div>
 
