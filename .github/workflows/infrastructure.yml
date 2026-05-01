@@ -1,8 +1,8 @@
 # Verifies that deployed cloud endpoints (Render) respond after infra-related changes.
 #
 # Setup (GitHub → Settings → Secrets and variables → Actions → Variables):
-#   RENDER_API_URL       e.g. https://your-backend.onrender.com
-#   RENDER_FRONTEND_URL  e.g. https://your-frontend.onrender.com
+#   ABDUL_RENDER_API_URL       e.g. https://your-backend.onrender.com
+#   ABDUL_RENDER_FRONTEND_URL  e.g. https://your-frontend.onrender.com
 #
 # Manual run: Actions → "Infrastructure verification" → Run workflow
 
@@ -31,10 +31,10 @@ jobs:
     steps:
       - name: Verify API (backend) is reachable
         env:
-          URL: ${{ vars.RENDER_API_URL }}
+          URL: ${{ vars.ABDUL_RENDER_API_URL }}
         run: |
           if [ -z "$URL" ]; then
-            echo "::error::Set Actions variable RENDER_API_URL (Settings → Secrets and variables → Actions → Variables)."
+            echo "::error::Set Actions variable ABDUL_RENDER_API_URL (Settings → Secrets and variables → Actions → Variables)."
             exit 1
           fi
           curl -fsS --max-time 60 "$URL/" -o /dev/null
@@ -42,10 +42,10 @@ jobs:
 
       - name: Verify frontend is reachable
         env:
-          URL: ${{ vars.RENDER_FRONTEND_URL }}
+          URL: ${{ vars.ABDUL_RENDER_FRONTEND_URL }}
         run: |
           if [ -z "$URL" ]; then
-            echo "::error::Set Actions variable RENDER_FRONTEND_URL (Settings → Secrets and variables → Actions → Variables)."
+            echo "::error::Set Actions variable ABDUL_RENDER_FRONTEND_URL (Settings → Secrets and variables → Actions → Variables)."
             exit 1
           fi
           curl -fsS --max-time 120 "$URL/" -o /dev/null
